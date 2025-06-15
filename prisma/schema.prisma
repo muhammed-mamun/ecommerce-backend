@@ -1,0 +1,204 @@
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for admin authentication
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  role      Role     @default(ADMIN)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("users")
+}
+
+// Product categories
+model Category {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  slug        String   @unique
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  products Product[]
+
+  @@map("categories")
+}
+
+// Color variants available in the system
+model Color {
+  id      String @id @default(cuid())
+  name    String @unique
+  hexCode String @unique // e.g., "#FF5733"
+
+  // Relations
+  productColors ProductColor[]
+  cartItems     CartItem[]
+  orderItems    OrderItem[]
+  packageItems  PackageItem[]
+
+  @@map("colors")
+}
+
+// Individual clothing products
+model Product {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  sku         String   @unique
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  stock       Int      @default(0)
+  categoryId  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  category     Category       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  colors       ProductColor[] // Available colors for this product
+  cartItems    CartItem[]
+  orderItems   OrderItem[]
+  packageItems PackageItem[]
+
+  @@map("products")
+}
+
+// Junction table for products and their available colors
+model ProductColor {
+  id        String @id @default(cuid())
+  productId String
+  colorId   String
+
+  // Relations
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color   Color   @relation(fields: [colorId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, colorId])
+  @@map("product_colors")
+}
+
+// Product packages (bundles of multiple products)
+model Package {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2) // Package price (could be discounted)
+  imageUrl    String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  items      PackageItem[] // Products included in this package
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@map("packages")
+}
+
+// Products included in packages
+model PackageItem {
+  id        String @id @default(cuid())
+  packageId String
+  productId String
+  quantity  Int    @default(1)
+
+  // Relations
+  package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  color   Color?  @relation(fields: [colorId], references: [id])
+  colorId String?
+
+  @@unique([packageId, productId])
+  @@map("package_items")
+}
+
+// Shopping cart for temporary storage
+model Cart {
+  id        String   @id @default(cuid())
+  sessionId String   @unique // For guest users
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  items CartItem[]
+
+  @@map("carts")
+}
+
+// Items in shopping cart
+model CartItem {
+  id        String   @id @default(cuid())
+  cartId    String
+  productId String? // For individual products
+  packageId String? // For packages
+  colorId   String? // Selected color
+  quantity  Int      @default(1)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  cart    Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
+  package Package? @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  color   Color?   @relation(fields: [colorId], references: [id])
+
+  @@unique([cartId, productId, colorId, packageId])
+  @@map("cart_items")
+}
+
+// Customer orders
+model Order {
+  id          String      @id @default(cuid())
+  sessionId   String?      @default("")
+  name        String      
+  phone       String
+  address     String
+  total       Decimal
+  status      String      @default("pending")
+  createdAt   DateTime    @default(now())
+  items       OrderItem[]
+}
+
+model OrderItem {
+  id        String   @id @default(cuid())
+  order     Order    @relation(fields: [orderId], references: [id])
+  orderId   String
+  product   Product? @relation(fields: [productId], references: [id])
+  productId String?
+  package   Package? @relation(fields: [packageId], references: [id])
+  packageId String?
+  color     Color?   @relation(fields: [colorId], references: [id])
+  colorId   String?
+  quantity  Int
+  price     Decimal  @db.Decimal(10, 2)
+  subtotal  Decimal  @db.Decimal(10, 2)
+}
+
+// Enums
+enum Role {
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}

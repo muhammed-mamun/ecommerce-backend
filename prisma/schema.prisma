@@ -44,10 +44,9 @@ model Color {
   hexCode String @unique // e.g., "#FF5733"
 
   // Relations
-  productColors ProductColor[]
-  cartItems     CartItem[]
+  products      Product[]
   orderItems    OrderItem[]
-  packageItems  PackageItem[]
+  // Removed cartItems and packageItems since they're no longer needed
 
   @@map("colors")
 }
@@ -58,36 +57,24 @@ model Product {
   name        String
   description String?
   price       Decimal  @db.Decimal(10, 2)
+  discount    Int      @default(0)
   sku         String   @unique
   imageUrl    String?
   isActive    Boolean  @default(true)
   stock       Int      @default(0)
   categoryId  String
+  colorId     String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   // Relations
   category     Category       @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  colors       ProductColor[] // Available colors for this product
+  color        Color?          @relation(fields: [colorId], references: [id], onDelete: Cascade)
   cartItems    CartItem[]
   orderItems   OrderItem[]
   packageItems PackageItem[]
 
   @@map("products")
-}
-
-// Junction table for products and their available colors
-model ProductColor {
-  id        String @id @default(cuid())
-  productId String
-  colorId   String
-
-  // Relations
-  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  color   Color   @relation(fields: [colorId], references: [id], onDelete: Cascade)
-
-  @@unique([productId, colorId])
-  @@map("product_colors")
 }
 
 // Product packages (bundles of multiple products)
@@ -98,6 +85,7 @@ model Package {
   price       Decimal  @db.Decimal(10, 2) // Package price (could be discounted)
   imageUrl    String?
   isActive    Boolean  @default(true)
+  stock       Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -119,8 +107,7 @@ model PackageItem {
   // Relations
   package Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
   product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  color   Color?  @relation(fields: [colorId], references: [id])
-  colorId String?
+  // Removed color relation since products have their own fixed color
 
   @@unique([packageId, productId])
   @@map("package_items")
@@ -145,7 +132,6 @@ model CartItem {
   cartId    String
   productId String? // For individual products
   packageId String? // For packages
-  colorId   String? // Selected color
   quantity  Int      @default(1)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -154,23 +140,22 @@ model CartItem {
   cart    Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
   product Product? @relation(fields: [productId], references: [id], onDelete: Cascade)
   package Package? @relation(fields: [packageId], references: [id], onDelete: Cascade)
-  color   Color?   @relation(fields: [colorId], references: [id])
 
-  @@unique([cartId, productId, colorId, packageId])
+  @@unique([cartId, productId, packageId])
   @@map("cart_items")
 }
 
 // Customer orders
 model Order {
-  id          String      @id @default(cuid())
-  sessionId   String?      @default("")
-  name        String      
-  phone       String
-  address     String
-  total       Decimal
-  status      String      @default("pending")
-  createdAt   DateTime    @default(now())
-  items       OrderItem[]
+  id        String      @id @default(cuid())
+  sessionId String?     @default("")
+  name      String
+  phone     String
+  address   String
+  total     Decimal
+  status    String      @default("pending")
+  createdAt DateTime    @default(now())
+  items     OrderItem[]
 }
 
 model OrderItem {
@@ -182,7 +167,7 @@ model OrderItem {
   package   Package? @relation(fields: [packageId], references: [id])
   packageId String?
   color     Color?   @relation(fields: [colorId], references: [id])
-  colorId   String?
+  colorId   String?  // Keep this for order history - captures the color at time of order
   quantity  Int
   price     Decimal  @db.Decimal(10, 2)
   subtotal  Decimal  @db.Decimal(10, 2)

@@ -1,16 +1,14 @@
-
 import prisma from '../DB/db.config.ts';
-
 import type { Request, Response } from 'express';
 
 // Get or create cart by session ID
-export const getOrCreateCart = async (req: Request, res:Response):Promise<void>  => {
+export const getOrCreateCart = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
     
     if (!sessionId) {
-       res.status(400).json({ error: 'Session ID is required' });
-       return
+      res.status(400).json({ error: 'Session ID is required' });
+      return;
     }
 
     let cart = await prisma.cart.findUnique({
@@ -20,20 +18,23 @@ export const getOrCreateCart = async (req: Request, res:Response):Promise<void> 
           include: {
             product: {
               include: {
-                category: true
+                category: true,
+                color: true // Product now has its own color
               }
             },
             package: {
               include: {
                 items: {
                   include: {
-                    product: true,
-                    color: true
+                    product: {
+                      include: {
+                        color: true
+                      }
+                    },
                   }
                 }
               }
-            },
-            color: true
+            }
           }
         }
       }
@@ -47,20 +48,24 @@ export const getOrCreateCart = async (req: Request, res:Response):Promise<void> 
             include: {
               product: {
                 include: {
-                  category: true
+                  category: true,
+                  color: true
                 }
               },
               package: {
                 include: {
                   items: {
                     include: {
-                      product: true,
-                      color: true
+                      product: {
+                        include: {
+                          color: true
+                        }
+                      },
+                     
                     }
                   }
                 }
-              },
-              color: true
+              }
             }
           }
         }
@@ -75,24 +80,24 @@ export const getOrCreateCart = async (req: Request, res:Response):Promise<void> 
 };
 
 // Add item to cart
-export const addItemToCart = async (req: Request, res:Response): Promise<void> => {
+export const addItemToCart = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
-    const { productId, packageId, colorId, quantity = 1 } = req.body;
+    const { productId, packageId, quantity = 1 } = req.body;
 
     if (!sessionId) {
-       res.status(400).json({ error: 'Session ID is required' });
-       return
+      res.status(400).json({ error: 'Session ID is required' });
+      return;
     }
 
     if (!productId && !packageId) {
-       res.status(400).json({ error: 'Either productId or packageId is required' });
-       return
+      res.status(400).json({ error: 'Either productId or packageId is required' });
+      return;
     }
 
     if (productId && packageId) {
-       res.status(400).json({ error: 'Cannot add both product and package in same item' });
-       return
+      res.status(400).json({ error: 'Cannot add both product and package in same item' });
+      return;
     }
 
     // Get or create cart
@@ -106,13 +111,12 @@ export const addItemToCart = async (req: Request, res:Response): Promise<void> =
       });
     }
 
-    // Check if item already exists in cart
+    // Check if item already exists in cart (no colorId needed since product has its own color)
     const existingItem = await prisma.cartItem.findFirst({
       where: {
         cartId: cart.id,
         productId: productId || null,
-        packageId: packageId || null,
-        colorId: colorId || null
+        packageId: packageId || null
       }
     });
 
@@ -125,49 +129,56 @@ export const addItemToCart = async (req: Request, res:Response): Promise<void> =
         include: {
           product: {
             include: {
-              category: true
+              category: true,
+              color: true
             }
           },
           package: {
             include: {
               items: {
                 include: {
-                  product: true,
-                  color: true
+                  product: {
+                    include: {
+                      color: true
+                    }
+                  },
+                 
                 }
               }
             }
-          },
-          color: true
+          }
         }
       });
     } else {
-      // Create new cart item
+      // Create new cart item (no colorId field needed)
       cartItem = await prisma.cartItem.create({
         data: {
           cartId: cart.id,
           productId,
           packageId,
-          colorId,
           quantity
         },
         include: {
           product: {
             include: {
-              category: true
+              category: true,
+              color: true
             }
           },
           package: {
             include: {
               items: {
                 include: {
-                  product: true,
-                  color: true
+                  product: {
+                    include: {
+                      color: true
+                    }
+                  },
+                 
                 }
               }
             }
-          },
-          color: true
+          }
         }
       });
     }
@@ -180,19 +191,19 @@ export const addItemToCart = async (req: Request, res:Response): Promise<void> =
 };
 
 // Update cart item quantity
-export const updateCartItem = async (req: Request, res:Response):Promise<void> => {
+export const updateCartItem = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId, itemId } = req.params;
     const { quantity } = req.body;
 
     if (!sessionId || !itemId) {
-       res.status(400).json({ error: 'Session ID and Item ID are required' });
-       return
+      res.status(400).json({ error: 'Session ID and Item ID are required' });
+      return;
     }
 
     if (quantity < 0) {
-       res.status(400).json({ error: 'Quantity cannot be negative' });
-       return
+      res.status(400).json({ error: 'Quantity cannot be negative' });
+      return;
     }
 
     // Verify the cart item belongs to the session
@@ -206,8 +217,8 @@ export const updateCartItem = async (req: Request, res:Response):Promise<void> =
     });
 
     if (!cart || cart.items.length === 0) {
-       res.status(404).json({ error: 'Cart item not found' });
-       return
+      res.status(404).json({ error: 'Cart item not found' });
+      return;
     }
 
     if (quantity === 0) {
@@ -215,8 +226,8 @@ export const updateCartItem = async (req: Request, res:Response):Promise<void> =
       await prisma.cartItem.delete({
         where: { id: itemId }
       });
-       res.json({ message: 'Item removed from cart' });
-       return
+      res.json({ message: 'Item removed from cart' });
+      return;
     }
 
     // Update quantity
@@ -226,20 +237,23 @@ export const updateCartItem = async (req: Request, res:Response):Promise<void> =
       include: {
         product: {
           include: {
-            category: true
+            category: true,
+            color: true
           }
         },
         package: {
           include: {
             items: {
               include: {
-                product: true,
-                color: true
+                product: {
+                  include: {
+                    color: true
+                  }
+                },
               }
             }
           }
-        },
-        color: true
+        }
       }
     });
 
@@ -251,13 +265,13 @@ export const updateCartItem = async (req: Request, res:Response):Promise<void> =
 };
 
 // Remove item from cart
-export const removeItemFromCart = async (req: Request, res:Response): Promise<void> => {
+export const removeItemFromCart = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId, itemId } = req.params;
 
     if (!sessionId || !itemId) {
-       res.status(400).json({ error: 'Session ID and Item ID are required' });
-       return
+      res.status(400).json({ error: 'Session ID and Item ID are required' });
+      return;
     }
 
     // Verify the cart item belongs to the session
@@ -271,8 +285,8 @@ export const removeItemFromCart = async (req: Request, res:Response): Promise<vo
     });
 
     if (!cart || cart.items.length === 0) {
-       res.status(404).json({ error: 'Cart item not found' });
-       return
+      res.status(404).json({ error: 'Cart item not found' });
+      return;
     }
 
     await prisma.cartItem.delete({
@@ -287,13 +301,13 @@ export const removeItemFromCart = async (req: Request, res:Response): Promise<vo
 };
 
 // Clear entire cart
-export const clearCart = async (req: Request, res:Response) :Promise<void>=> {
+export const clearCart = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
 
     if (!sessionId) {
-       res.status(400).json({ error: 'Session ID is required' });
-       return
+      res.status(400).json({ error: 'Session ID is required' });
+      return;
     }
 
     const cart = await prisma.cart.findUnique({
@@ -301,8 +315,8 @@ export const clearCart = async (req: Request, res:Response) :Promise<void>=> {
     });
 
     if (!cart) {
-       res.status(404).json({ error: 'Cart not found' });
-       return
+      res.status(404).json({ error: 'Cart not found' });
+      return;
     }
 
     await prisma.cartItem.deleteMany({
@@ -317,13 +331,13 @@ export const clearCart = async (req: Request, res:Response) :Promise<void>=> {
 };
 
 // Get cart summary (total items, total price)
-export const getCartSummary = async (req: Request, res:Response): Promise<void> => {
+export const getCartSummary = async (req: Request, res: Response): Promise<void> => {
   try {
     const { sessionId } = req.params;
 
     if (!sessionId) {
-       res.status(400).json({ error: 'Session ID is required' });
-       return
+      res.status(400).json({ error: 'Session ID is required' });
+      return;
     }
 
     const cart = await prisma.cart.findUnique({
@@ -339,12 +353,12 @@ export const getCartSummary = async (req: Request, res:Response): Promise<void> 
     });
 
     if (!cart) {
-       res.json({
+      res.json({
         totalItems: 0,
         totalPrice: 0,
         itemCount: 0
       });
-      return
+      return;
     }
 
     let totalItems = 0;
@@ -369,4 +383,3 @@ export const getCartSummary = async (req: Request, res:Response): Promise<void> 
     res.status(500).json({ error: 'Internal server error' });
   }
 };
-

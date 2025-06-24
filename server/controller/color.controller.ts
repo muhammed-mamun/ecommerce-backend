@@ -92,7 +92,8 @@ export const getColors = async (req: Request, res: Response): Promise<void> => {
         include: {
           _count: {
             select: {
-              productColors: true
+              products: true,
+              orderItems: true
             }
           }
         }
@@ -143,23 +144,9 @@ export const getColor = async (req: Request, res: Response): Promise<void> => {
     const color = await prisma.color.findUnique({
       where: { id },
       include: {
-        productColors: {
-          include: {
-            product: {
-              select: {
-                id: true,
-                name: true,
-                price: true,
-                imageUrl: true,
-                isActive: true
-              }
-            }
-          }
-        },
         _count: {
           select: {
-            productColors: true,
-            cartItems: true,
+            products: true,
             orderItems: true
           }
         }
@@ -336,8 +323,7 @@ export const deleteColor = async (req: Request, res: Response): Promise<void> =>
       include: {
         _count: {
           select: {
-            productColors: true,
-            cartItems: true,
+            products: true,
             orderItems: true
           }
         }
@@ -353,17 +339,15 @@ export const deleteColor = async (req: Request, res: Response): Promise<void> =>
     }
 
     // Check if color is being used
-    const isInUse = existingColor._count.productColors > 0 || 
-                   existingColor._count.cartItems > 0 || 
-                   existingColor._count.orderItems > 0;
+    const isInUse = existingColor._count.products > 0 || 
+                    existingColor._count.orderItems > 0;
 
     if (isInUse && force !== 'true') {
         res.status(400).json({
         success: false,
         message: "Cannot delete color that is in use. Set isActive=false instead or use ?force=true",
         data: {
-          productsUsing: existingColor._count.productColors,
-          cartItemsUsing: existingColor._count.cartItems,
+          productsUsing: existingColor._count.products,
           orderItemsUsing: existingColor._count.orderItems
         }
       });
